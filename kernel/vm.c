@@ -13,7 +13,7 @@ int is_key_used[NUM_KEYS];       // Whether or not this key is being used
 void* key_page_addrs[NUM_KEYS][NUM_PAGES];  // for each page or just the first??????
 int num_key_pages[NUM_KEYS];     // Number of pages used by each of the keys
 int key_ref_count[NUM_KEYS];     // Ref count for each key
-int top;
+uint top;
 
 
 extern char data[];  // defined in data.S
@@ -241,7 +241,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   char *mem;
   uint a;
 
-  if(newsz > USERTOP)
+  if(newsz > top)
     return 0;
   if(newsz < oldsz)
     return oldsz;
@@ -435,12 +435,15 @@ shmgetat(int key, int num_pages)
   // Return existing page mapping if key has already been used
   if (is_key_used[key] == 1) {
     for(i = 0; i < num_pages; i++) {
-
+      // map to phy add????
     }
-    return key_page_addrs[key][0];    //  ?????????????????????
-  } else { // Return new mapping
+    return key_page_addrs[key][num_key_pages[key]-1];    //  ?????????????????????
 
-
+  } else { // Create a new mapping
+    // Check if trying to access already allocated memory
+    if ((top - num_pages*PGSIZE) < proc->sz) {
+      return (void*)-1;
+    }
     // Allocate memory and make the mappings
     char* mem;
     for(i = 0; i < num_pages; i++) {
@@ -449,20 +452,22 @@ shmgetat(int key, int num_pages)
         cprintf("allocuvm out of memory\n");
         return (void*)-1;
       }
-      key_page_addrs[key][i] = (void*)mem;
-
-      // V mem
-      void* addr = (void*)(top - PGSIZE);  // address of next available page.
-      //change address of next available page.
-      top -= PGSIZE*num_pages;
-
       memset(mem, 0, PGSIZE);
+
+      // VP
+      void* addr = (void*)(top - PGSIZE);  // address of available page.
+      // change address of next available page.
+      top -= PGSIZE;
+
+      // Map vp to pp
       mappages(proc->pgdir, addr, PGSIZE, PADDR(mem), PTE_W|PTE_U);
 
       key_page_addrs[key][i] = addr;
     }
     is_key_used[key] = 1;
-    return key_page_addrs[key][0];
+    num_key_pages[key] = num_pages;
+
+    return (void*)top;
   }
 }
 
