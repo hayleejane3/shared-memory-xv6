@@ -156,7 +156,7 @@ fork(void)
   *np->tf = *proc->tf;
 
   for(i = 0; i < 8; i++) {
-    np->keys[0] = proc->keys[0];
+    np->keys[i] = proc->keys[i];
   }
 
   // Clear %eax so that fork returns 0 in the child.

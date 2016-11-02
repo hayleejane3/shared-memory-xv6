@@ -342,6 +342,12 @@ copyuvm(pde_t *pgdir, uint sz)
     if(mappages(d, (void*)i, PGSIZE, PADDR(mem), PTE_W|PTE_U) < 0)
       goto bad;
   }
+  // Increase ref counts for use by child process
+  for(i = 0; i < NUM_KEYS; i++) {
+    if(proc->keys[i] == 1) {
+      key_ref_count[i]++;
+    }
+  }
   return d;
 
 bad:

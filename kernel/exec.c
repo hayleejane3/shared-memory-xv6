@@ -17,6 +17,9 @@ exec(char *path, char **argv)
   struct proghdr ph;
   pde_t *pgdir, *oldpgdir;
 
+  // Decrease ref_count since memory is overwritten by exec
+  dec_ref_count(proc);
+
   if((ip = namei(path)) == 0)
     return -1;
   ilock(ip);
@@ -86,6 +89,7 @@ exec(char *path, char **argv)
   proc->sz = sz;
   proc->tf->eip = elf.entry;  // main
   proc->tf->esp = sp;
+
   switchuvm(proc);
   freevm(oldpgdir);
 
