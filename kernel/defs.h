@@ -169,6 +169,7 @@ void            switchuvm(struct proc*);
 void            switchkvm(void);
 int             copyout(pde_t*, uint, void*, uint);
 void            shmeminit(void);
+void            dec_ref_count(struct proc*);
 void*           shmgetat(int, int);
 int             shm_refcount(int);
 

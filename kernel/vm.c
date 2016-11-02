@@ -297,12 +297,6 @@ freevm(pde_t *pgdir)
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, USERTOP, 0);
-  // Decrease ref_count if proc uses the key
-  for(i = 0; i < NUM_KEYS; i++) {
-    if(proc->keys[i] == 1) {
-      key_ref_count[i]--;
-    }
-  }
   for(i = 0; i < NPDENTRIES; i++){
     if(pgdir[i] & PTE_P) {
       for (j = 0; j < NUM_KEYS; j++) {
@@ -471,6 +465,18 @@ shmgetat(int key, int num_pages)
   }
 }
 
+void
+dec_ref_count(struct proc *p)
+{
+  int i;
+  // Decrease ref_count if proc uses the key
+  for(i = 0; i < NUM_KEYS; i++) {
+    if(p->keys[i] == 1) {
+      key_ref_count[i]--;
+    }
+  }
+}
+
 // This call returns, for a particular key, how many processes currently are
 // sharing the associated pages.
 int
@@ -480,5 +486,6 @@ shm_refcount(int key)
   if (key < 0 || key > 7) {
     return -1;
   }
+  cprintf("%d:%d\n", key, key_ref_count[key]);
   return key_ref_count[key];
 }

@@ -39,6 +39,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
+  int i;
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
@@ -50,6 +51,9 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  for(i = 0; i < NUM_KEYS; i ++) {
+    p->keys[i] = 0;
+  }
   release(&ptable.lock);
 
   // Allocate kernel stack if possible.
@@ -58,11 +62,6 @@ found:
     return 0;
   }
   sp = p->kstack + KSTACKSIZE;
-
-  int i;
-  for (i = 0; i < NUM_KEYS; i++) {
-    p->keys[i] = 0;
-  }
 
   // Leave room for trap frame.
   sp -= sizeof *p->tf;
@@ -181,17 +180,7 @@ void
 exit(void)
 {
   struct proc *p;
-  int fd, i;
-
-  // Reduce key ref count when process exits
-  for (i =0; i < 8; i++) {
-    if(proc->keys[i] == 1) {
-    /*  keyRefCount[i]--;
-      if (keyRefCount[i] == 0) {
-        isKeyUsed[i] = 0;
-      } */
-    }
-  }
+  int fd;
 
   if(proc == initproc)
     panic("init exiting");
@@ -248,6 +237,7 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
+        dec_ref_count(p);
         freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;
