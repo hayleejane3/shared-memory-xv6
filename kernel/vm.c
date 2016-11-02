@@ -6,6 +6,16 @@
 #include "proc.h"
 #include "elf.h"
 
+
+#define NUM_KEYS (8)
+#define NUM_PAGES (4)
+int is_key_used[NUM_KEYS];       // Whether or not this key is being used
+void* key_page_addrs[NUM_KEYS][NUM_PAGES];  // for each page or just the first??????
+int num_key_pages[NUM_KEYS];     // Number of pages used by each of the keys
+int key_ref_count[NUM_KEYS];     // Ref count for each key
+int top;
+
+
 extern char data[];  // defined in data.S
 
 static pde_t *kpgdir;  // for use in scheduler()
@@ -40,7 +50,7 @@ seginit(void)
 
   lgdt(c->gdt, sizeof(c->gdt));
   loadgs(SEG_KCPU << 3);
-  
+
   // Initialize cpu-local storage.
   cpu = c;
   proc = 0;
@@ -64,7 +74,7 @@ walkpgdir(pde_t *pgdir, const void *va, int create)
     // Make sure all those PTE_P bits are zero.
     memset(pgtab, 0, PGSIZE);
     // The permissions here are overly generous, but they can
-    // be further restricted by the permissions in the page table 
+    // be further restricted by the permissions in the page table
     // entries, if necessary.
     *pde = PADDR(pgtab) | PTE_P | PTE_W | PTE_U;
   }
@@ -79,7 +89,7 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
 {
   char *a, *last;
   pte_t *pte;
-  
+
   a = PGROUNDDOWN(la);
   last = PGROUNDDOWN(la + size - 1);
   for(;;){
@@ -104,7 +114,7 @@ mappages(pde_t *pgdir, void *la, uint size, uint pa, int perm)
 // A user process uses the same page table as the kernel; the
 // page protection bits prevent it from using anything other
 // than its memory.
-// 
+//
 // setupkvm() and exec() set up every page table like this:
 //   0..640K          : user memory (text, data, stack, heap)
 //   640K..1M         : mapped direct (for IO space)
@@ -190,7 +200,7 @@ void
 inituvm(pde_t *pgdir, char *init, uint sz)
 {
   char *mem;
-  
+
   if(sz >= PGSIZE)
     panic("inituvm: more than a page");
   mem = kalloc();
@@ -282,14 +292,34 @@ deallocuvm(pde_t *pgdir, uint oldsz, uint newsz)
 void
 freevm(pde_t *pgdir)
 {
-  uint i;
+  uint i, j, k;
 
   if(pgdir == 0)
     panic("freevm: no pgdir");
   deallocuvm(pgdir, USERTOP, 0);
+  // Decrease ref_count if proc uses the key
+  for(i = 0; i < NUM_KEYS; i++) {
+    if(proc->keys[i] == 1) {
+      key_ref_count[i]--;
+    }
+  }
   for(i = 0; i < NPDENTRIES; i++){
-    if(pgdir[i] & PTE_P)
-      kfree((char*)PTE_ADDR(pgdir[i]));
+    if(pgdir[i] & PTE_P) {
+      for (j = 0; j < NUM_KEYS; j++) {
+        if (key_ref_count[i] != 0) {  // Shared page is being used. Not to be
+                                      // freed for sure.
+          break;
+        }
+        for(k = 0; k < NUM_PAGES; k++) {
+          if((char*)PTE_ADDR(pgdir[i]) == key_page_addrs[i][k]) {
+            break;
+          }
+        }
+      }
+      // Dont free the shared pages that are being used used
+      if (j == NUM_KEYS && k == NUM_PAGES)
+        kfree((char*)PTE_ADDR(pgdir[i]));
+    }
   }
   kfree((char*)pgdir);
 }
@@ -347,7 +377,7 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
 {
   char *buf, *pa0;
   uint n, va0;
-  
+
   buf = (char*)p;
   while(len > 0){
     va0 = (uint)PGROUNDDOWN(va);
@@ -363,4 +393,87 @@ copyout(pde_t *pgdir, uint va, void *p, uint len)
     va = va0 + PGSIZE;
   }
   return 0;
+}
+
+void
+shmeminit(void) {
+  int i, j;
+  for (i = 0; i < NUM_KEYS; i++) {
+    is_key_used[i] = 0;
+    num_key_pages[i] = 0;
+    key_ref_count[i] = 0;
+    for(j = 0; j < NUM_PAGES; j++) {
+      key_page_addrs[i][j] = NULL;
+    }
+  }
+  top = USERTOP;
+}
+
+// simplified combination of the two Linux system calls: shmget() followed by
+// shmat(). The idea is that if processes call shmgetat() with the same key for
+// the first argument, then they will share the specified number of physical
+// pages. Using different keys in different calls to shmgetat() corresponds to
+// different physical pages.
+void*
+shmgetat(int key, int num_pages)
+{
+  int i;
+  // Check for valid params
+  if (key < 0 || key > 7) {
+    return (void*)-1;
+  }
+  if (num_pages < 1 || num_pages > 4) {
+    return (void*)-1;
+  }
+
+  // Update ref count if process isnt already using this key
+  if (proc->keys[key] == 0) {
+    key_ref_count[key]++;
+    proc->keys[key] = 1;
+  }
+
+  // Return existing page mapping if key has already been used
+  if (is_key_used[key] == 1) {
+    for(i = 0; i < num_pages; i++) {
+
+    }
+    return key_page_addrs[key][0];    //  ?????????????????????
+  } else { // Return new mapping
+
+
+    // Allocate memory and make the mappings
+    char* mem;
+    for(i = 0; i < num_pages; i++) {
+      mem = kalloc();  // Physical memory
+      if (mem == 0) {
+        cprintf("allocuvm out of memory\n");
+        return (void*)-1;
+      }
+      key_page_addrs[key][i] = (void*)mem;
+
+      // V mem
+      void* addr = (void*)(top - PGSIZE);  // address of next available page.
+      //change address of next available page.
+      top -= PGSIZE*num_pages;
+
+      memset(mem, 0, PGSIZE);
+      mappages(proc->pgdir, addr, PGSIZE, PADDR(mem), PTE_W|PTE_U);
+
+      key_page_addrs[key][i] = addr;
+    }
+    is_key_used[key] = 1;
+    return key_page_addrs[key][0];
+  }
+}
+
+// This call returns, for a particular key, how many processes currently are
+// sharing the associated pages.
+int
+shm_refcount(int key)
+{
+  // Check for valid params
+  if (key < 0 || key > 7) {
+    return -1;
+  }
+  return key_ref_count[key];
 }

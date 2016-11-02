@@ -88,3 +88,29 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// return the virtual address of the shared pages to the caller, so the process
+// can read/write them.
+int
+sys_shmgetat(void)
+{
+  int key, num_pages;
+
+  if(argint(0, &key) < 0)
+    return -1;
+  if(argint(1, &num_pages) < 0)
+    return -1;
+
+  return (int)shmgetat(key, num_pages);
+}
+
+// returns, for a particular key, how many processes currently are sharing the
+// associated pages.
+int
+sys_shm_refcount(void)
+{
+  int key;
+  if(argint(0, &key) < 0)
+    return -1;
+  return shm_refcount(key);
+}

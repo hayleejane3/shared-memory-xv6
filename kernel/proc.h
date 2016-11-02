@@ -74,6 +74,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int keys[8];                 // Keys that the process has called shmgetat with
 };
 
 // Process memory is laid out contiguously, low addresses first:

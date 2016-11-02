@@ -6,12 +6,17 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define NUM_KEYS (8)
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
 } ptable;
 
 static struct proc *initproc;
+
+// Keep track of which keys have already been used
+
 
 int nextpid = 1;
 extern void forkret(void);
@@ -53,11 +58,16 @@ found:
     return 0;
   }
   sp = p->kstack + KSTACKSIZE;
-  
+
+  int i;
+  for (i = 0; i < NUM_KEYS; i++) {
+    p->keys[i] = 0;
+  }
+
   // Leave room for trap frame.
   sp -= sizeof *p->tf;
   p->tf = (struct trapframe*)sp;
-  
+
   // Set up new context to start executing at forkret,
   // which returns to trapret.
   sp -= 4;
@@ -77,7 +87,7 @@ userinit(void)
 {
   struct proc *p;
   extern char _binary_initcode_start[], _binary_initcode_size[];
-  
+
   p = allocproc();
   acquire(&ptable.lock);
   initproc = p;
@@ -107,7 +117,7 @@ int
 growproc(int n)
 {
   uint sz;
-  
+
   sz = proc->sz;
   if(n > 0){
     if((sz = allocuvm(proc->pgdir, sz, sz + n)) == 0)
@@ -141,9 +151,14 @@ fork(void)
     np->state = UNUSED;
     return -1;
   }
+
   np->sz = proc->sz;
   np->parent = proc;
   *np->tf = *proc->tf;
+
+  for(i = 0; i < 8; i++) {
+    np->keys[0] = proc->keys[0];
+  }
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
@@ -152,7 +167,7 @@ fork(void)
     if(proc->ofile[i])
       np->ofile[i] = filedup(proc->ofile[i]);
   np->cwd = idup(proc->cwd);
- 
+
   pid = np->pid;
   np->state = RUNNABLE;
   safestrcpy(np->name, proc->name, sizeof(proc->name));
@@ -166,7 +181,17 @@ void
 exit(void)
 {
   struct proc *p;
-  int fd;
+  int fd, i;
+
+  // Reduce key ref count when process exits
+  for (i =0; i < 8; i++) {
+    if(proc->keys[i] == 1) {
+    /*  keyRefCount[i]--;
+      if (keyRefCount[i] == 0) {
+        isKeyUsed[i] = 0;
+      } */
+    }
+  }
 
   if(proc == initproc)
     panic("init exiting");
@@ -322,7 +347,7 @@ forkret(void)
 {
   // Still holding ptable.lock from scheduler.
   release(&ptable.lock);
-  
+
   // Return to "caller", actually trapret (see allocproc).
 }
 
@@ -425,7 +450,7 @@ procdump(void)
   struct proc *p;
   char *state;
   uint pc[10];
-  
+
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
     if(p->state == UNUSED)
       continue;
@@ -442,5 +467,3 @@ procdump(void)
     cprintf("\n");
   }
 }
-
-
