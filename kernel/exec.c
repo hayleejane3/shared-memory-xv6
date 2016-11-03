@@ -7,6 +7,7 @@
 #include "elf.h"
 
 #define NUM_KEYS (8)
+#define NUM_PAGES (4)
 
 int
 exec(char *path, char **argv)
@@ -21,8 +22,12 @@ exec(char *path, char **argv)
 
   // Decrease ref_count since memory is overwritten by exec
   dec_ref_count(proc);
+  int j;
   for(i = 0; i < NUM_KEYS; i++) {
     proc->keys[i] = 0;
+    for(j = 0; j < NUM_PAGES; j++) {
+      proc->page_addrs[i][j] = NULL;
+    }
   }
 
   if((ip = namei(path)) == 0)

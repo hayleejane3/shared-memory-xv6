@@ -159,13 +159,14 @@ fork(void)
   np->parent = proc;
   *np->tf = *proc->tf;
 
+  int j;
   for(i = 0; i < NUM_KEYS; i++) {
     np->keys[i] = proc->keys[i];
-    // for(j = 0; j < NUM_PAGES; j++) {
-    //   np->page_addrs[i][j] = proc->page_addrs[i][j];
-    // }
+    for(j = 0; j < NUM_PAGES; j++) {
+      np->page_addrs[i][j] = proc->page_addrs[i][j];
+    }
   }
-  // np->top = proc->top;
+  np->top = proc->top;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
