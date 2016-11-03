@@ -239,7 +239,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   char *mem;
   uint a;
 
-  if(newsz > USERTOP)
+  if(newsz > proc->top)
     return 0;
   if(newsz < oldsz)
     return oldsz;

@@ -58,6 +58,7 @@ found:
       p->page_addrs[i][j] = NULL;
     }
   }
+  p->top = USERTOP;
   release(&ptable.lock);
 
   // Allocate kernel stack if possible.
