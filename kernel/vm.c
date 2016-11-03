@@ -13,8 +13,6 @@ int is_key_used[NUM_KEYS];       // Whether or not this key is being used
 void* key_page_addrs[NUM_KEYS][NUM_PAGES];  // for each page or just the first??????
 int num_key_pages[NUM_KEYS];     // Number of pages used by each of the keys
 int key_ref_count[NUM_KEYS];     // Ref count for each key
-uint top;
-
 
 extern char data[];  // defined in data.S
 
@@ -241,7 +239,7 @@ allocuvm(pde_t *pgdir, uint oldsz, uint newsz)
   char *mem;
   uint a;
 
-  if(newsz > top)
+  if(newsz > USERTOP)
     return 0;
   if(newsz < oldsz)
     return oldsz;
@@ -406,7 +404,6 @@ shmeminit(void) {
       key_page_addrs[i][j] = NULL;
     }
   }
-  top = USERTOP;
 }
 
 // simplified combination of the two Linux system calls: shmget() followed by
@@ -426,25 +423,29 @@ shmgetat(int key, int num_pages)
     return (void*)-1;
   }
 
+  // If this is the first time that proc is calling shmgetat, set top to USERTOP
+  for(i = 0; i < NUM_KEYS; i++) {
+    if(proc->keys[i] == 1) {
+      break;
+    }
+  }
+  if(i == NUM_KEYS) {
+    proc->top = USERTOP;
+  }
+
   // Update ref count if process isnt already using this key
   if (proc->keys[key] == 0) {
     key_ref_count[key]++;
     proc->keys[key] = 1;
   }
 
-  // Return existing page mapping if key has already been used
-  if (is_key_used[key] == 1) {
-    for(i = 0; i < num_pages; i++) {
-      // map to phy add????
-    }
-    return key_page_addrs[key][num_key_pages[key]-1];    //  ?????????????????????
-
-  } else { // Create a new mapping
+  // Allocate memory if key hasnt been used yet
+  if (is_key_used[key] == 0) {
     // Check if trying to access already allocated memory
-    if ((top - num_pages*PGSIZE) < proc->sz) {
+    if ((proc->top - num_pages*PGSIZE) < proc->sz) {
       return (void*)-1;
     }
-    // Allocate memory and make the mappings
+    // Allocate physical memory and make the va-pa mappings
     char* mem;
     for(i = 0; i < num_pages; i++) {
       mem = kalloc();  // Physical memory
@@ -454,21 +455,40 @@ shmgetat(int key, int num_pages)
       }
       memset(mem, 0, PGSIZE);
 
-      // VP
-      void* addr = (void*)(top - PGSIZE);  // address of available page.
-      // change address of next available page.
-      top -= PGSIZE;
+      // Store the physical page for future use
+      key_page_addrs[key][i] = mem;
+
+      // Set up mapping for this process
+      // VA.
+      void* addr = (void*)(proc->top - PGSIZE);
+      proc->page_addrs[key][i] = addr;
+
+      // Change address of next available VP
+      proc->top -= PGSIZE;
 
       // Map vp to pp
       mappages(proc->pgdir, addr, PGSIZE, PADDR(mem), PTE_W|PTE_U);
-
-      key_page_addrs[key][i] = addr;
     }
     is_key_used[key] = 1;
     num_key_pages[key] = num_pages;
+  } else { // Key is being used
+    if (proc->keys[key] == 0) { // Check if this process is currently using key
+      return proc->page_addrs[key][num_key_pages[key]-1];
+      // Create mapping for va-pa for this new process
+      for(i = 0; i < NUM_PAGES; i++) {
+        // VA.
+        void* addr = (void*)(proc->top - PGSIZE);
+        proc->page_addrs[key][i] = addr;
 
-    return (void*)top;
+        // Change address of next available VP
+        proc->top -= PGSIZE;
+
+        // Map vp to pp
+        mappages(proc->pgdir, addr, PGSIZE, PADDR(key_page_addrs[key][i]), PTE_W|PTE_U);
+      }
+    }
   }
+  return proc->page_addrs[key][num_key_pages[key]-1];
 }
 
 void
@@ -479,6 +499,9 @@ dec_ref_count(struct proc *p)
   for(i = 0; i < NUM_KEYS; i++) {
     if(p->keys[i] == 1) {
       key_ref_count[i]--;
+      if(key_ref_count[i] == 0) {
+        is_key_used[i] = 0;
+      }
     }
   }
 }

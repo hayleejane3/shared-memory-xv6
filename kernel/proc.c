@@ -7,6 +7,7 @@
 #include "spinlock.h"
 
 #define NUM_KEYS (8)
+#define NUM_PAGES (4)
 
 struct {
   struct spinlock lock;
@@ -39,7 +40,7 @@ allocproc(void)
 {
   struct proc *p;
   char *sp;
-  int i;
+  int i, j;
 
   acquire(&ptable.lock);
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
@@ -53,6 +54,9 @@ found:
   p->pid = nextpid++;
   for(i = 0; i < NUM_KEYS; i ++) {
     p->keys[i] = 0;
+    for(j = 0; j < NUM_PAGES; j++) {
+      p->page_addrs[i][j] = NULL;
+    }
   }
   release(&ptable.lock);
 
@@ -155,9 +159,13 @@ fork(void)
   np->parent = proc;
   *np->tf = *proc->tf;
 
-  for(i = 0; i < 8; i++) {
+  for(i = 0; i < NUM_KEYS; i++) {
     np->keys[i] = proc->keys[i];
+    // for(j = 0; j < NUM_PAGES; j++) {
+    //   np->page_addrs[i][j] = proc->page_addrs[i][j];
+    // }
   }
+  // np->top = proc->top;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;

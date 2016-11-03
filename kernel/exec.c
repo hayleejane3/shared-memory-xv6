@@ -6,6 +6,8 @@
 #include "x86.h"
 #include "elf.h"
 
+#define NUM_KEYS (8)
+
 int
 exec(char *path, char **argv)
 {
@@ -19,6 +21,9 @@ exec(char *path, char **argv)
 
   // Decrease ref_count since memory is overwritten by exec
   dec_ref_count(proc);
+  for(i = 0; i < NUM_KEYS; i++) {
+    proc->keys[i] = 0;
+  }
 
   if((ip = namei(path)) == 0)
     return -1;

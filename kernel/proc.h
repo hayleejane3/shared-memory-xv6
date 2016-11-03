@@ -75,6 +75,8 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   int keys[8];                 // Keys that the process has called shmgetat with
+  int top;                     // Current top of VA
+  void* page_addrs[8][4];      // VAs of used pages
 };
 
 // Process memory is laid out contiguously, low addresses first:
