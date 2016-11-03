@@ -202,7 +202,7 @@ exit(void)
       proc->ofile[fd] = 0;
     }
   }
-
+  dec_ref_count(proc);
   iput(proc->cwd);
   proc->cwd = 0;
 
@@ -247,7 +247,6 @@ wait(void)
         pid = p->pid;
         kfree(p->kstack);
         p->kstack = 0;
-        dec_ref_count(p);
         freevm(p->pgdir);
         p->state = UNUSED;
         p->pid = 0;

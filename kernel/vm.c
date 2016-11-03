@@ -467,13 +467,14 @@ shmgetat(int key, int num_pages)
       proc->top -= PGSIZE;
 
       // Map vp to pp
-      mappages(proc->pgdir, addr, PGSIZE, PADDR(mem), PTE_W|PTE_U);
+      if (mappages(proc->pgdir, addr, PGSIZE, PADDR(mem), PTE_P|PTE_W|PTE_U) < 0) {
+        return (void*)-1;
+      }
     }
     is_key_used[key] = 1;
     num_key_pages[key] = num_pages;
   } else { // Key is being used
     if (proc->keys[key] == 0) { // Check if this process is currently using key
-      return proc->page_addrs[key][num_key_pages[key]-1];
       // Create mapping for va-pa for this new process
       for(i = 0; i < NUM_PAGES; i++) {
         // VA.
@@ -484,7 +485,10 @@ shmgetat(int key, int num_pages)
         proc->top -= PGSIZE;
 
         // Map vp to pp
-        mappages(proc->pgdir, addr, PGSIZE, PADDR(key_page_addrs[key][i]), PTE_W|PTE_U);
+        if (mappages(proc->pgdir, addr, PGSIZE,
+             PADDR(key_page_addrs[key][i]), PTE_P|PTE_W|PTE_U) < 0) {
+          return (void*)-1;
+        }
       }
     }
   }
