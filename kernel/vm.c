@@ -340,6 +340,24 @@ copyuvm(pde_t *pgdir, uint sz)
     if(mappages(d, (void*)i, PGSIZE, PADDR(mem), PTE_W|PTE_U) < 0)
       goto bad;
   }
+int j, k;
+  for(i = proc->top; i < USERTOP; i += PGSIZE){
+    if((pte = walkpgdir(pgdir, (void*)i, 0)) == 0)
+      panic("copyuvm: pte should exist");
+    if(!(*pte & PTE_P))
+      panic("copyuvm: page not present");
+    pa = PTE_ADDR(*pte);
+
+    for(j = 0; j < NUM_KEYS; j++) {
+      for(k = 0; k < NUM_PAGES; k++) {
+        if(proc->page_addrs[i][j] == (void*)i){
+          break;
+        }
+      }
+    }
+    if(mappages(d, (void*)i, PGSIZE, PADDR(key_page_addrs[j][k]), PTE_W|PTE_U) < 0)
+      goto bad;
+  }
   // Increase ref counts for use by child process
   for(i = 0; i < NUM_KEYS; i++) {
     if(proc->keys[i] == 1) {
@@ -519,6 +537,5 @@ shm_refcount(int key)
   if (key < 0 || key > 7) {
     return -1;
   }
-  cprintf("%d:%d\n", key, key_ref_count[key]);
   return key_ref_count[key];
 }
