@@ -31,7 +31,7 @@ fetchstr(struct proc *p, uint addr, char **pp)
 {
   char *s, *ep;
 
-  if(addr >= p->sz && addr < p->top)
+  if((addr >= p->sz && addr < p->top) || addr >= USERTOP)
     return -1;
   if(addr < p->sz) {
     ep = (char*)p->sz;
